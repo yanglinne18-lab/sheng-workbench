@@ -36,10 +36,16 @@ Open the iOS project in Xcode:
 npm run ios:open
 ```
 
+## Local Notifications
+
+The iOS prototype includes `@capacitor/local-notifications`.
+
+The dashboard has a local notification test control. On a real iPhone, tap "测试通知" to request notification permission and schedule a short test reminder.
+
 ## Notes
 
 - The first prototype intentionally uses a remote URL so the app can follow web-side updates.
 - For formal internal use, replace the GitHub Pages URL in `capacitor.config.ts` with a company-controlled HTTPS or intranet URL.
-- The native notification plugin is not installed yet; that belongs to the next step.
+- The native notification plugin is installed for local, on-device reminders. Server-side push notifications can be added later when the internal API and deployment path are ready.
 - This machine has been verified with Xcode 26.5 and the iOS 26.5 simulator runtime. If a new Mac cannot see simulator destinations, install the matching iOS platform runtime from Xcode Settings > Components.
 - Command-line verification used an iPhone 17 / iOS 26.5 simulator and produced a working `com.sheng.workbench` app launch.

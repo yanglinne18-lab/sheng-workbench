@@ -475,6 +475,69 @@ button {
   color: #fff;
 }
 
+.notificationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field-bg);
+}
+
+.notificationBar.ready,
+.notificationBar.sent {
+  border-color: var(--nav-active-border);
+  background: var(--green-soft);
+}
+
+.notificationBar.blocked,
+.notificationBar.error {
+  border-color: var(--danger-border);
+  background: var(--red-soft);
+}
+
+.notificationBar.unsupported {
+  background: var(--hover-bg);
+}
+
+.notificationMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.notificationMeta svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}
+
+.notificationMeta strong,
+.notificationMeta span {
+  display: block;
+}
+
+.notificationMeta strong {
+  font-size: 13px;
+}
+
+.notificationMeta span {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notificationButton {
+  flex: 0 0 auto;
+}
+
 .composerControls {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) 150px auto;
@@ -1318,7 +1381,8 @@ button {
 
   .topbar,
   .entityTop,
-  .voiceBar {
+  .voiceBar,
+  .notificationBar {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -1577,11 +1641,25 @@ button {
     gap: 10px;
   }
 
+  .notificationBar {
+    align-items: stretch;
+    gap: 10px;
+  }
+
   .voiceMeta {
     align-items: flex-start;
   }
 
+  .notificationMeta {
+    align-items: flex-start;
+  }
+
   .voiceMeta span {
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .notificationMeta span {
     overflow: visible;
     white-space: normal;
   }
@@ -1601,6 +1679,10 @@ button {
 
   .voiceButton {
     min-width: 126px;
+  }
+
+  .notificationButton {
+    width: 100%;
   }
 
   .composerControls {

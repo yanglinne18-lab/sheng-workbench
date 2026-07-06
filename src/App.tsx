@@ -1,8 +1,12 @@
 import type { ChangeEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import {
   Archive,
   AudioLines,
+  Bell,
+  BellRing,
   Bot,
   BriefcaseBusiness,
   Building2,
@@ -61,6 +65,7 @@ import {
 import { clamp, formatDateTime, makeId, normalizeName, todayISO, unique } from "./utils";
 
 type View = "dashboard" | "review" | "people" | "organizations" | "network" | "ask" | "settings";
+type NotificationStatus = "checking" | "ready" | "blocked" | "unsupported" | "sent" | "error";
 
 const navItems: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "工作台", icon: LayoutDashboard },
@@ -94,6 +99,12 @@ export function App() {
     isBrowserSpeechSupported() ? "idle" : "unsupported",
   );
   const [voiceMessage, setVoiceMessage] = useState("可点击麦克风，把口述内容转写到记事框");
+  const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>(() =>
+    Capacitor.isNativePlatform() ? "checking" : "unsupported",
+  );
+  const [notificationMessage, setNotificationMessage] = useState(() =>
+    Capacitor.isNativePlatform() ? "正在检查手机通知权限" : "iPhone App 内可用，网页模式不触发系统通知",
+  );
 
   useEffect(() => {
     const savedAt = saveState(state);
@@ -106,6 +117,32 @@ export function App() {
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort();
+    };
+  }, []);
+  useEffect(() => {
+    void refreshNotificationPermission();
+
+    if (!Capacitor.isNativePlatform()) return;
+
+    let didCancel = false;
+    const handles: Array<{ remove: () => Promise<void> }> = [];
+
+    LocalNotifications.addListener("localNotificationReceived", (notification) => {
+      if (didCancel) return;
+      setNotificationStatus("sent");
+      setNotificationMessage(`已收到：${notification.title}`);
+    }).then((handle) => handles.push(handle));
+
+    LocalNotifications.addListener("localNotificationActionPerformed", () => {
+      if (didCancel) return;
+      setActiveView("dashboard");
+      setNotificationStatus("ready");
+      setNotificationMessage("已从通知回到工作台");
+    }).then((handle) => handles.push(handle));
+
+    return () => {
+      didCancel = true;
+      handles.forEach((handle) => void handle.remove());
     };
   }, []);
   useEffect(() => {
@@ -301,6 +338,78 @@ export function App() {
     }
   }
 
+  async function refreshNotificationPermission() {
+    if (!Capacitor.isNativePlatform()) {
+      setNotificationStatus("unsupported");
+      setNotificationMessage("iPhone App 内可用，网页模式不触发系统通知");
+      return false;
+    }
+
+    try {
+      const permission = await LocalNotifications.checkPermissions();
+      if (permission.display === "granted") {
+        setNotificationStatus("ready");
+        setNotificationMessage("手机通知已允许");
+        return true;
+      }
+      if (permission.display === "denied") {
+        setNotificationStatus("blocked");
+        setNotificationMessage("通知权限已关闭，请在 iPhone 设置中开启");
+        return false;
+      }
+      setNotificationStatus("ready");
+      setNotificationMessage("首次测试会弹出系统授权");
+      return false;
+    } catch {
+      setNotificationStatus("error");
+      setNotificationMessage("通知模块检查失败，请重新打开 App");
+      return false;
+    }
+  }
+
+  async function sendTestNotification() {
+    if (!Capacitor.isNativePlatform()) {
+      setNotificationStatus("unsupported");
+      setNotificationMessage("当前是网页模式；安装到 iPhone App 后可测试系统通知");
+      return;
+    }
+
+    try {
+      setNotificationStatus("checking");
+      setNotificationMessage("正在请求通知权限");
+      let permission = await LocalNotifications.checkPermissions();
+
+      if (permission.display !== "granted") {
+        permission = await LocalNotifications.requestPermissions();
+      }
+
+      if (permission.display !== "granted") {
+        setNotificationStatus("blocked");
+        setNotificationMessage("未获得通知权限，暂时无法弹出手机通知");
+        return;
+      }
+
+      const id = Math.floor(Date.now() % 2147483647);
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id,
+            title: "盛老师工作台",
+            body: "测试提醒：后续可用于人脉跟进、会面准备和事项提醒。",
+            schedule: { at: new Date(Date.now() + 1500) },
+            extra: { kind: "test-notification" },
+          },
+        ],
+      });
+
+      setNotificationStatus("sent");
+      setNotificationMessage("已安排测试通知，约 2 秒后弹出");
+    } catch {
+      setNotificationStatus("error");
+      setNotificationMessage("测试通知发送失败，请重新打开 App 后再试");
+    }
+  }
+
   return (
     <div className="appShell">
       <input
@@ -371,6 +480,8 @@ export function App() {
             pendingNotes={pendingNotes}
             voiceStatus={voiceStatus}
             voiceMessage={voiceMessage}
+            notificationStatus={notificationStatus}
+            notificationMessage={notificationMessage}
             speechMode={state.settings.speechMode}
             onDraftChange={setDraft}
             onSourceChange={setSource}
@@ -380,6 +491,7 @@ export function App() {
             onToggleTask={toggleTask}
             onStartVoice={startVoiceInput}
             onStopVoice={stopVoiceInput}
+            onSendTestNotification={sendTestNotification}
           />
         ) : null}
         {activeView === "review" ? (
@@ -506,6 +618,8 @@ function Dashboard({
   pendingNotes,
   voiceStatus,
   voiceMessage,
+  notificationStatus,
+  notificationMessage,
   speechMode,
   onDraftChange,
   onSourceChange,
@@ -515,6 +629,7 @@ function Dashboard({
   onToggleTask,
   onStartVoice,
   onStopVoice,
+  onSendTestNotification,
 }: {
   stats: Array<{ label: string; value: number; icon: LucideIcon }>;
   draft: string;
@@ -525,6 +640,8 @@ function Dashboard({
   pendingNotes: Note[];
   voiceStatus: VoiceStatus;
   voiceMessage: string;
+  notificationStatus: NotificationStatus;
+  notificationMessage: string;
   speechMode: WorkbenchState["settings"]["speechMode"];
   onDraftChange: (value: string) => void;
   onSourceChange: (value: string) => void;
@@ -534,6 +651,7 @@ function Dashboard({
   onToggleTask: (taskId: string) => void;
   onStartVoice: () => void;
   onStopVoice: () => void;
+  onSendTestNotification: () => void;
 }) {
   const activeTasks = state.tasks.filter((task) => task.status !== "完成");
   const recentInteractions = state.interactions.slice(0, 4);
@@ -568,6 +686,11 @@ function Dashboard({
             speechMode={speechMode}
             onStart={onStartVoice}
             onStop={onStopVoice}
+          />
+          <NotificationBar
+            status={notificationStatus}
+            message={notificationMessage}
+            onSendTest={onSendTestNotification}
           />
           <div className="composerControls">
             <label>
@@ -633,6 +756,40 @@ function Dashboard({
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function NotificationBar({
+  status,
+  message,
+  onSendTest,
+}: {
+  status: NotificationStatus;
+  message: string;
+  onSendTest: () => void;
+}) {
+  const isBusy = status === "checking";
+  const Icon = status === "sent" ? BellRing : Bell;
+
+  return (
+    <div className={`notificationBar ${status}`}>
+      <div className="notificationMeta">
+        <Icon size={18} />
+        <div>
+          <strong>手机本地通知</strong>
+          <span>{message}</span>
+        </div>
+      </div>
+      <button
+        className="secondaryButton notificationButton"
+        onClick={onSendTest}
+        disabled={isBusy}
+        title="发送测试通知"
+      >
+        <Bell size={17} />
+        <span>{isBusy ? "检查中" : "测试通知"}</span>
+      </button>
     </div>
   );
 }
