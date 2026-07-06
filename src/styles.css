@@ -112,6 +112,16 @@ button {
   cursor: pointer;
 }
 
+.visuallyHidden {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .appShell {
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr);
@@ -1485,6 +1495,10 @@ button {
 
   .topActions .iconTextButton {
     padding: 0 10px;
+  }
+
+  .topActions .iconTextButton span {
+    font-size: 12px;
   }
 
   .viewStack,

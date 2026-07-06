@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
@@ -29,11 +29,12 @@ import {
   Trash2,
   UserRound,
   UsersRound,
+  Upload,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { mockLLMProvider } from "./mockLLM";
-import { exportState, loadState, resetState, saveState } from "./storage";
+import { exportState, getSavedAt, loadState, normalizeState, resetState, saveState } from "./storage";
 import type {
   AnalysisResult,
   CandidateOpportunity,
@@ -86,12 +87,19 @@ export function App() {
   const [answer, setAnswer] = useState<AnswerResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(() => getSavedAt());
+  const [storageMessage, setStorageMessage] = useState("本机自动保存");
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>(() =>
     isBrowserSpeechSupported() ? "idle" : "unsupported",
   );
   const [voiceMessage, setVoiceMessage] = useState("可点击麦克风，把口述内容转写到记事框");
 
-  useEffect(() => saveState(state), [state]);
+  useEffect(() => {
+    const savedAt = saveState(state);
+    setLastSavedAt(savedAt);
+    setStorageMessage("本机已保存");
+  }, [state]);
   useEffect(() => {
     document.documentElement.dataset.theme = state.settings.theme;
   }, [state.settings.theme]);
@@ -173,6 +181,7 @@ export function App() {
   function handleReset() {
     const next = resetState();
     setState(next);
+    setStorageMessage("已恢复样例");
     setActiveView("dashboard");
   }
 
@@ -271,8 +280,36 @@ export function App() {
     setVoiceMessage("语音转写已停止");
   }
 
+  function handleExport() {
+    exportState(state);
+    setStorageMessage("已导出备份");
+  }
+
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setState(normalizeState(JSON.parse(text)));
+      setStorageMessage("已导入备份");
+      setActiveView("dashboard");
+    } catch {
+      setStorageMessage("导入失败");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   return (
     <div className="appShell">
+      <input
+        ref={importInputRef}
+        className="visuallyHidden"
+        type="file"
+        accept="application/json,.json"
+        onChange={handleImportFile}
+      />
       <aside className="sidebar">
         <div className="brandBlock">
           <div className="brandMark">
@@ -316,7 +353,10 @@ export function App() {
       <main className="mainArea">
         <Topbar
           state={state}
-          onExport={() => exportState(state)}
+          lastSavedAt={lastSavedAt}
+          storageMessage={storageMessage}
+          onExport={handleExport}
+          onImport={() => importInputRef.current?.click()}
           onReset={handleReset}
           onToggleTheme={toggleTheme}
         />
@@ -386,12 +426,18 @@ export function App() {
 
 function Topbar({
   state,
+  lastSavedAt,
+  storageMessage,
   onExport,
+  onImport,
   onReset,
   onToggleTheme,
 }: {
   state: WorkbenchState;
+  lastSavedAt: string | null;
+  storageMessage: string;
   onExport: () => void;
+  onImport: () => void;
   onReset: () => void;
   onToggleTheme: () => void;
 }) {
@@ -404,6 +450,10 @@ function Topbar({
         <p>事实入库、来源追踪、AI 草稿确认后沉淀。</p>
       </div>
       <div className="topActions">
+        <Badge tone="gray">
+          <Save size={14} />
+          {formatSavedAt(lastSavedAt, storageMessage)}
+        </Badge>
         <Badge tone="green">
           <Database size={14} />
           {state.settings.retrievalMode === "hybrid" ? "混合检索" : "关键词检索"}
@@ -423,12 +473,27 @@ function Topbar({
           <Download size={17} />
           <span>导出</span>
         </button>
+        <button className="iconTextButton" onClick={onImport} title="导入 JSON">
+          <Upload size={17} />
+          <span>导入</span>
+        </button>
         <button className="iconButton" onClick={onReset} title="恢复样例数据">
           <RefreshCcw size={17} />
         </button>
       </div>
     </header>
   );
+}
+
+function formatSavedAt(savedAt: string | null, fallback: string) {
+  if (!savedAt) return fallback;
+  const date = new Date(savedAt);
+  if (Number.isNaN(date.getTime())) return fallback;
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+  return `${fallback} ${time}`;
 }
 
 function Dashboard({
