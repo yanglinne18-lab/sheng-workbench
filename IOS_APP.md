@@ -41,4 +41,5 @@ npm run ios:open
 - The first prototype intentionally uses a remote URL so the app can follow web-side updates.
 - For formal internal use, replace the GitHub Pages URL in `capacitor.config.ts` with a company-controlled HTTPS or intranet URL.
 - The native notification plugin is not installed yet; that belongs to the next step.
-- On this machine, `xcodebuild -list` can read the project, but command-line builds report an out-of-date CoreSimulator framework. Update Xcode/macOS simulator components or run from Xcode with an available device before testing on a simulator.
+- This machine has been verified with Xcode 26.5 and the iOS 26.5 simulator runtime. If a new Mac cannot see simulator destinations, install the matching iOS platform runtime from Xcode Settings > Components.
+- Command-line verification used an iPhone 17 / iOS 26.5 simulator and produced a working `com.sheng.workbench` app launch.
